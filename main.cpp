@@ -21,16 +21,23 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
+
+//TODO: Crashes if y-axis is of limit
+
 #include "csv.hpp"
 #include <iostream>
 #include <raylib.h>
 #include <raymath.h>
 #include <vector>
+#include <string>
+#include <stdexcept>
 
 #define L 50
 #define PAD 80
-#define W 1000
+#define W 1200
 #define H 800
+#define SIDEBAR 400
+#define MAX_INPUT 3
 
 using namespace csv;
 using namespace std;
@@ -56,17 +63,25 @@ int main(){
 
     string path;
     const char* text = "Drop CSV file in";
+    const char* err = "Something is wrong with CSV file";
+    char x_axis[MAX_INPUT+1] = "0\0";
+    char y_axis[MAX_INPUT+1] = "1\0";
+    int xcounter = 0;
+    int ycounter = 0;
+    bool xcol = false;
+    bool ycol = false;
     vector<float> x;
     vector<float> y;
     int fontsize = 20;
     int i;
     bool loaded = false;
+    bool input = false;
 
     CSVFormat format;
     format.delimiter(',');
     
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE);   
     InitWindow(W, H, "DataViz");
+
     while (!WindowShouldClose()){
         if (IsFileDropped()){
             FilePathList files = LoadDroppedFiles();
@@ -74,6 +89,8 @@ int main(){
 
             if (!path.empty()){
                 if (loaded){
+                    x.clear();
+                    y.clear();
                 }
                 CSVReader reader(path, format);
                 loaded = true;
@@ -81,11 +98,23 @@ int main(){
                 for (CSVRow& row: reader){
                     i = 0;
                     for (CSVField& field: row){
-                        if (i == 0){
-                            x.push_back(stof(field.get<>()));
+                        int xu = stoi((string)x_axis);
+                        int yu = stoi((string)y_axis);
+                        try{
+                            if (i == xu && i == yu){
+                                x.push_back(stof(field.get<>()));
+                                y.push_back(stof(field.get<>()));
+                            }
+                            else{
+                                if (i == xu){
+                                    x.push_back(stof(field.get<>()));
+                                }
+                                if (i == yu){
+                                    y.push_back(stof(field.get<>()));
+                                }
+                            }
                         }
-                        else if (i == 1){
-                            y.push_back(stof(field.get<>()));
+                        catch (const exception& e){
                         }
                         i++;
                     }
@@ -93,20 +122,133 @@ int main(){
             }
             UnloadDroppedFiles(files);
         }
+
+        if (input){
+            if (loaded){
+                x.clear();
+                y.clear();
+            }
+            CSVReader reader(path, format);
+            loaded = true;
+            i = 0;
+            for (CSVRow& row: reader){
+                i = 0;
+                for (CSVField& field: row){
+                    int xu = stoi((string)x_axis);
+                    int yu = stoi((string)y_axis);
+                    try{
+                        if (i == xu && i == yu){
+                            x.push_back(stof(field.get<>()));
+                            y.push_back(stof(field.get<>()));
+                        }
+                        else{
+                            if (i == xu){
+                                x.push_back(stof(field.get<>()));
+                            }
+                            if (i == yu){
+                                y.push_back(stof(field.get<>()));
+                            }
+                        }
+                    }
+                    catch (const exception& e){
+                    }
+                    i++;
+                }
+            }
+            input = false;
+        }
+            
+        
+
+        if(loaded){
+            if (CheckCollisionPointRec(GetMousePosition(), (Rectangle){L, 2*L, 100, 50})){
+                xcol = true;
+            }
+            else if (CheckCollisionPointRec(GetMousePosition(), (Rectangle){L, 5*L, 100, 50})){
+                ycol = true;
+            }
+            else{
+                xcol = false;
+                ycol = false;
+            }
+
+            if (xcol){
+                SetMouseCursor(MOUSE_CURSOR_IBEAM);
+
+                int key = GetCharPressed();
+
+                while (key > 0){
+                    if ((key >= 48) && (key <= 57) && (xcounter < MAX_INPUT)){
+                        x_axis[xcounter] = (char)key;
+                        x_axis[xcounter+1] = '\0';
+                        xcounter++;
+                    }
+                    key = GetCharPressed();
+                }
+
+                if (IsKeyPressed(KEY_BACKSPACE)){
+                    xcounter--;
+                    if (xcounter < 0){
+                        xcounter = 0;
+                    }
+                    x_axis[xcounter] = '\0';
+                }
+                if (IsKeyPressed(KEY_ENTER)){
+                    input = true;
+                }
+            }
+            else if (ycol){
+                SetMouseCursor(MOUSE_CURSOR_IBEAM);
+
+                int ykey = GetCharPressed();
+
+                while (ykey > 0){
+                    if ((ykey >= 48) && (ykey <= 57) && (ycounter < MAX_INPUT)){
+                        y_axis[ycounter] = (char)ykey;
+                        y_axis[ycounter+1] = '\0';
+                        ycounter++;
+                    }
+                    ykey = GetCharPressed();
+                }
+
+                if (IsKeyPressed(KEY_BACKSPACE)){
+                    ycounter--;
+                    if (ycounter < 0){
+                        ycounter = 0;
+                    }
+                    y_axis[ycounter] = '\0';
+                }
+
+                if (IsKeyPressed(KEY_ENTER)){
+                    input = true;        
+                }
+            }
+            else{
+                SetMouseCursor(MOUSE_CURSOR_DEFAULT);
+            }
+        }
     
 
         BeginDrawing();
         ClearBackground(GetColor(0x181818AA));
         if (loaded){
-            DrawLine(200, L, 200, H-L, WHITE);
-            DrawLine(200, H-L, W-L, H-L, WHITE);
+            DrawText("Column index of X axis",L, 2*L-30, fontsize, WHITE);
+            DrawRectangle(L, 2*L, 100, 50, LIGHTGRAY);
+            DrawText(x_axis, L+5, 2*L+8, 40, MAROON);
+
+            DrawText("Column index of Y axis", L, 5*L-30, fontsize, WHITE);
+            DrawRectangle(L, 5*L, 100, 50, LIGHTGRAY);
+            DrawText(y_axis, L+5, 5*L+8, 40, MAROON);
+
+            DrawLine(SIDEBAR, L, SIDEBAR, H-L, WHITE);
+            DrawLine(SIDEBAR, H-L, W-L, H-L, WHITE);
             for (int i = 0; i < x.size(); i++){
                 int yc = (int)reverse(Remap(y[i], 0, y[max_vector(y)], PAD, H-PAD));
-                int xc = (int)Remap(x[i], 0, x[max_vector(x)], 200, W-PAD);
+                int xc = (int)Remap(x[i], 0, x[max_vector(x)], SIDEBAR, W-PAD);
                 DrawCircle(xc, yc, 5, RED);
             }
         }
-        else{
+        else {
             DrawText(text, (W/2)-(sizeof(text)/2*fontsize), H/2, fontsize, WHITE);
         }
         EndDrawing();
